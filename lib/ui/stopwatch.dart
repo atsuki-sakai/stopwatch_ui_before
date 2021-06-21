@@ -3,30 +3,59 @@ import 'package:flutter/scheduler.dart';
 import 'package:stopwatch_flutter/ui/reset_button.dart';
 import 'package:stopwatch_flutter/ui/start_stop_button.dart';
 import 'package:stopwatch_flutter/ui/stopwatch_renderer.dart';
-import 'package:stopwatch_flutter/ui/stopwatch_ticker_ui.dart';
 
 class Stopwatch extends StatefulWidget {
   @override
   _StopwatchState createState() => _StopwatchState();
 }
 
-class _StopwatchState extends State<Stopwatch> {
-  // FIXME - StatefulWidgetのStateをGlobalKeyにする場合StatefulWidgetのStateClassの_を消す必要がある。エラーが発生
-  final _tickerUIKey = GlobalKey<StopwatchTickerUIState>();
+class _StopwatchState extends State<Stopwatch>
+    with SingleTickerProviderStateMixin {
+  // FIXME - toggleRunningが呼ばれる度に時間がリセットされるのを防ぐ為のプロパティー　２つ
+  Duration _previouslyElapsed = Duration.zero;
+  Duration _currentlyElapsed = Duration.zero;
+  Duration get _elapsed => _currentlyElapsed + _previouslyElapsed;
+
+  late final Ticker _ticker;
   bool _isRunning = false;
 
   void _reset() {
+    _ticker.stop();
     setState(() {
       _isRunning = false;
+      _previouslyElapsed = Duration.zero;
+      _currentlyElapsed = Duration.zero;
     });
-    _tickerUIKey.currentState?.reset();
   }
 
   void _toggleRunning() {
     setState(() {
       _isRunning = !_isRunning;
     });
-    _tickerUIKey.currentState?.toggleRunning(_isRunning);
+    if (_isRunning) {
+      _ticker.start();
+    } else {
+      _previouslyElapsed += _currentlyElapsed;
+      _ticker.stop();
+      _currentlyElapsed = Duration.zero;
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    _ticker = this.createTicker((elapsed) {
+      setState(() {
+        _currentlyElapsed = elapsed;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
   }
 
   @override
@@ -38,12 +67,9 @@ class _StopwatchState extends State<Stopwatch> {
         children: [
           SizedBox(
             child: StopwatchRenderer(
+              elapsed: _elapsed,
               radius: radius,
             ),
-          ),
-          StopwatchTickerUI(
-            key: _tickerUIKey,
-            radius: radius,
           ),
           Align(
             alignment: Alignment.bottomLeft,
